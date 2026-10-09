@@ -14,6 +14,7 @@ export function MonthPicker() {
   const { month, setMonth } = useMonth();
   function move(delta: number) {
     const [y, m] = month.split("-").map(Number);
+    if (y === undefined || m === undefined) return;
     setMonth(localDate(new Date(y, m - 1 + delta, 1)).slice(0, 7));
   }
   return <div className="flex items-center gap-1"><CalendarDays className="mr-2 h-4 w-4 text-primary" /><Button variant="ghost" size="icon" title="Mois précédent" onClick={() => move(-1)}><ChevronLeft /></Button><Input aria-label="Mois du carnet" type="month" className="w-44 border-none bg-transparent font-medium" value={month} onChange={e => e.target.value && setMonth(e.target.value)} /><Button variant="ghost" size="icon" title="Mois suivant" onClick={() => move(1)}><ChevronRight /></Button></div>;

@@ -12,6 +12,7 @@ export function monthlyIncome(payments: { received_date: string; amount_usd: num
 }
 export function dueDate(month: string, day: number) {
   const [year, m] = month.split("-").map(Number);
+  if (year === undefined || m === undefined) return `${month}-01`;
   const last = new Date(year, m, 0).getDate();
   return `${month}-${String(Math.min(day, last)).padStart(2, "0")}`;
 }
