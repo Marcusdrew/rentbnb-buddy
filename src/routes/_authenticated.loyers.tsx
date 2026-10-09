@@ -2,24 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Download, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Download, ArrowDownLeft, Home } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { settingsQuery, tenantsQuery, type Tenant } from "@/lib/data";
+import { settingsQuery, tenantsQuery, paymentsQuery, type Tenant, type RentalPayment } from "@/lib/data";
 import { SEED_TENANTS } from "@/lib/seed";
 import { formatUSD, formatFC } from "@/lib/format";
+import { localDate, inMonth, displayDate, dueDate } from "@/lib/monthly";
+import { useMonth } from "@/components/month-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/loyers")({
   head: () => ({
@@ -42,232 +38,52 @@ export const Route = createFileRoute("/_authenticated/loyers")({
   component: LoyersPage,
 });
 
-type FormState = { id?: string; name: string; expected: string; received: string; note: string };
-const EMPTY: FormState = { name: "", expected: "", received: "", note: "" };
-
-function num(v: string) {
-  const n = Number(v.replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
+type TenantForm = { id?: string; name: string; expected: string; day: string; note: string };
+function num(v: string) { return Number(v.replace(/\s/g, "").replace(",", ".")); }
 function LoyersPage() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
+  const { user } = useAuth(); const { month } = useMonth(); const qc = useQueryClient();
   const { data: tenants } = useSuspenseQuery(tenantsQuery);
   const { data: settings } = useSuspenseQuery(settingsQuery);
+  const { data: allPayments } = useSuspenseQuery(paymentsQuery);
+  const payments = allPayments.filter(p => inMonth(p.received_date,month));
   const rate = settings?.usd_fc_rate ?? 2300;
-
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY);
-  const [busy, setBusy] = useState(false);
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ["tenants"] });
-
-  function openNew() {
-    setForm(EMPTY);
-    setOpen(true);
-  }
-  function openEdit(t: Tenant) {
-    setForm({
-      id: t.id,
-      name: t.name,
-      expected: String(t.expected_usd),
-      received: String(t.received_usd),
-      note: t.note ?? "",
-    });
-    setOpen(true);
-  }
-
+  const [open,setOpen] = useState(false); const [busy,setBusy] = useState(false);
+  const [form,setForm] = useState<TenantForm>({ name: "", expected: "", day: "1", note: "" });
+  const [paymentOpen,setPaymentOpen] = useState(false);
+  const [payment,setPayment] = useState({ id: "", tenantId: "", amount: "", date: localDate(), note: "" });
+  const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey:["tenants"] }),qc.invalidateQueries({ queryKey:["rental_payments"] })]); };
+  const receivedFor = (id: string) => payments.filter(p=>p.tenant_id===id).reduce((s,p)=>s+p.amount_usd,0);
+  function edit(t?: Tenant) { setForm(t ? { id:t.id,name:t.name,expected:String(t.expected_usd),day:String(t.due_day),note:t.note??"" } : { name:"",expected:"",day:"1",note:"" }); setOpen(true); }
+  function receive(t: Tenant, p?: RentalPayment) { setPayment({ id:p?.id??"",tenantId:t.id,amount:String(p?.amount_usd??Math.max(0,t.expected_usd-receivedFor(t.id))),date:p?.received_date??(localDate().startsWith(month) ? localDate() : `${month}-01`),note:p?.note??"" });setPaymentOpen(true); }
   async function save() {
-    if (!user || !form.name.trim()) {
-      toast.error("Indiquez le nom du locataire.");
-      return;
-    }
-    setBusy(true);
-    const payload = {
-      name: form.name.trim(),
-      expected_usd: num(form.expected),
-      received_usd: num(form.received),
-      note: form.note.trim() || null,
-    };
-    const { error } = form.id
-      ? await supabase.from("tenants").update(payload).eq("id", form.id)
-      : await supabase.from("tenants").insert({ ...payload, user_id: user.id });
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    setOpen(false);
-    refresh();
-    toast.success(form.id ? "Locataire modifié" : "Locataire ajouté");
-  }
-
-  async function remove(t: Tenant) {
-    if (!confirm(`Supprimer ${t.name} ?`)) return;
-    const { error } = await supabase.from("tenants").delete().eq("id", t.id);
-    if (error) { toast.error(error.message); return; }
-    refresh();
-  }
-
-  async function markPaid(t: Tenant) {
-    const { error } = await supabase
-      .from("tenants")
-      .update({ received_usd: t.expected_usd })
-      .eq("id", t.id);
-    if (error) { toast.error(error.message); return; }
-    refresh();
-    toast.success(`${t.name} : loyer encaissé`);
-  }
-
-  async function importSeed() {
     if (!user) return;
-    const { error } = await supabase
-      .from("tenants")
-      .insert(SEED_TENANTS.map((t) => ({ ...t, user_id: user.id })));
-    if (error) { toast.error(error.message); return; }
-    refresh();
-    toast.success("Locataires de votre fichier importés");
+    if (!form.name.trim() || !Number.isFinite(num(form.expected)) || num(form.expected)<0 || !Number.isInteger(num(form.day)) || num(form.day)<1 || num(form.day)>31) { toast.error("Indiquez un nom, un montant positif et un jour de 1 à 31.");return; }
+    setBusy(true);
+    const payload = { name:form.name.trim(),expected_usd:num(form.expected),due_day:num(form.day),note:form.note.trim()||null };
+    const {error} = form.id ? await supabase.from("tenants").update(payload).eq("id",form.id) : await supabase.from("tenants").insert({ ...payload,user_id:user.id });
+    setBusy(false);if(error){toast.error(error.message);return;}setOpen(false);await refresh();toast.success("Locataire enregistré");
   }
-
-  const totalExpected = tenants.reduce((s, t) => s + t.expected_usd, 0);
-  const totalReceived = tenants.reduce((s, t) => s + t.received_usd, 0);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Carnet de loyers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Chacun de vos locataires et ce qu'il rapporte.
-          </p>
-        </div>
-        <Button onClick={openNew}>
-          <Plus className="mr-1 h-4 w-4" /> Ajouter un locataire
-        </Button>
-      </div>
-
-      {tenants.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <p className="text-muted-foreground">
-              Aucun locataire pour l'instant.
-            </p>
-            <Button variant="outline" onClick={importSeed}>
-              <Download className="mr-1 h-4 w-4" /> Reprendre les loyers de mon
-              fichier Excel
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {tenants.map((t) => {
-            const rest = t.expected_usd - t.received_usd;
-            const paid = rest <= 0;
-            return (
-              <Card key={t.id}>
-                <CardContent className="flex flex-wrap items-center gap-4 px-5 py-4">
-                  <div className="min-w-40 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold">{t.name}</p>
-                      <Badge
-                        variant={paid ? "default" : "outline"}
-                        className={paid ? "bg-success text-success-foreground" : "border-gold text-foreground"}
-                      >
-                        {paid ? "Encaissé" : "En attente"}
-                      </Badge>
-                    </div>
-                    {t.note && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{t.note}</p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 text-right text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Attendu</p>
-                      <p className="font-medium">{formatUSD(t.expected_usd)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Reçu</p>
-                      <p className="font-medium text-success">{formatUSD(t.received_usd)}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatFC(t.received_usd * rate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Reste</p>
-                      <p className={`font-medium ${rest > 0 ? "text-destructive" : ""}`}>
-                        {formatUSD(Math.max(rest, 0))}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {!paid && (
-                      <Button size="icon" variant="ghost" title="Marquer encaissé" onClick={() => markPaid(t)}>
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                      </Button>
-                    )}
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(t)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => remove(t)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-              <p className="font-display text-lg font-semibold">Total</p>
-              <div className="flex gap-8 text-right text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Attendu</p>
-                  <p className="font-semibold">{formatUSD(totalExpected)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Reçu</p>
-                  <p className="font-semibold text-success">{formatUSD(totalReceived)}</p>
-                  <p className="text-[11px] text-muted-foreground">{formatFC(totalReceived * rate)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Reste</p>
-                  <p className="font-semibold">{formatUSD(totalExpected - totalReceived)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{form.id ? "Modifier le locataire" : "Nouveau locataire"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nom / bien loué</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="ex. Mimosa" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Loyer attendu ($)</Label>
-                <Input inputMode="decimal" value={form.expected} onChange={(e) => setForm({ ...form, expected: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Montant reçu ($)</Label>
-                <Input inputMode="decimal" value={form.received} onChange={(e) => setForm({ ...form, received: e.target.value })} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Note (facultatif)</Label>
-              <Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={save} disabled={busy}>Enregistrer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+  async function savePayment() {
+    if(!user)return;
+    if(!Number.isFinite(num(payment.amount)) || num(payment.amount)<=0 || !payment.date){toast.error("Indiquez un montant positif et la date de réception.");return;}
+    setBusy(true);const payload={tenant_id:payment.tenantId,amount_usd:num(payment.amount),received_date:payment.date,note:payment.note.trim()||null,user_id:user.id};
+    const {error}= payment.id ? await supabase.from("rental_payments").update(payload).eq("id",payment.id) : await supabase.from("rental_payments").insert(payload);
+    setBusy(false);if(error){toast.error(error.message);return;}setPaymentOpen(false);await refresh();toast.success("Encaissement enregistré");
+  }
+  async function removeTenant(t:Tenant){if(!confirm(`Supprimer ${t.name} et ses encaissements ?`))return;const {error}=await supabase.from("tenants").delete().eq("id",t.id);if(error){toast.error(error.message);return;}await refresh();}
+  async function removePayment(p:RentalPayment){if(!confirm("Supprimer cet encaissement ?"))return;const {error}=await supabase.from("rental_payments").delete().eq("id",p.id);if(error){toast.error(error.message);return;}await refresh();}
+  async function importSeed(){if(!user)return;setBusy(true);const {error}=await supabase.from("tenants").insert(SEED_TENANTS.map(t=>({name:t.name,expected_usd:t.expected_usd,user_id:user.id})));setBusy(false);if(error){toast.error(error.message);return;}await refresh();toast.success("Locataires importés. Les encaissements restent à dater.");}
+  const expected=tenants.reduce((s,t)=>s+t.expected_usd,0), received=payments.reduce((s,p)=>s+p.amount_usd,0);
+  return <div className="space-y-6 page-enter"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="section-kicker">MES REVENUS</p><h1 className="mt-2 text-3xl font-semibold">Carnet de loyers</h1></div><Button onClick={()=>edit()}><Plus /> Ajouter un locataire</Button></div>
+    <div className="grid gap-4 sm:grid-cols-3">{[{label:"Attendu ce mois-ci",amount:expected},{label:"Encaissé ce mois-ci",amount:received},{label:"Reste à encaisser",amount:tenants.reduce((s,t)=>s+Math.max(0,t.expected_usd-receivedFor(t.id)),0)}].map(({label,amount})=><Card key={label}><CardContent className="p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-3 text-2xl font-semibold">{formatUSD(amount)}</p><p className="mt-1 text-sm text-muted-foreground">{formatFC(amount*rate)}</p></CardContent></Card>)}</div>
+    {tenants.length===0 ? <div className="empty-note flex flex-col items-center gap-4 py-12"><Home className="h-8 w-8 text-primary" /><p>Aucun locataire pour l’instant.</p><Button variant="outline" disabled={busy} onClick={importSeed}><Download /> Reprendre les locataires de mon fichier Excel</Button></div> : <div className="space-y-3">{tenants.map(t=>{
+      const received=receivedFor(t.id), rest=Math.max(0,t.expected_usd-received);const history=payments.filter(p=>p.tenant_id===t.id);
+      return <Card key={t.id}><CardContent className="p-5"><div className="flex flex-wrap items-start gap-4"><span className="stat-icon bg-primary/10 text-primary"><Home /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold">{t.name}</h2><Badge variant="outline" className={rest===0 ? "border-success/30 bg-success/10 text-success" : "border-gold/40 bg-gold/10 text-foreground"}>{rest===0 ? "Encaissé" : received>0 ? "Partiel" : "En attente"}</Badge></div><p className="mt-1 text-xs text-muted-foreground">Échéance : {displayDate(dueDate(month,t.due_day))}{t.note ? ` · ${t.note}` : ""}</p></div><div className="flex items-center gap-1"><Button size="sm" variant="secondary" onClick={()=>receive(t)}><ArrowDownLeft /> Encaisser</Button><Button size="icon" variant="ghost" title="Modifier le locataire" onClick={()=>edit(t)}><Pencil /></Button><Button size="icon" variant="ghost" title="Supprimer le locataire" onClick={()=>removeTenant(t)}><Trash2 className="text-destructive" /></Button></div></div>
+      <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4">{[{label:"Attendu",value:t.expected_usd},{label:"Reçu",value:received},{label:"Reste",value:rest}].map(v=><div key={v.label}><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 text-base font-semibold ${v.label==="Reçu" ? "text-success" : ""}`}>{formatUSD(v.value)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(v.value*rate)}</p></div>)}</div>
+      {history.length>0 && <div className="mt-4 border-t border-border pt-2">{history.map(p=><div key={p.id} className="flex flex-wrap items-center gap-2 py-2 text-xs"><span className="text-muted-foreground">{displayDate(p.received_date)}</span><span className="min-w-0 flex-1">{p.note||"Loyer reçu"}</span><span className="text-success">{formatUSD(p.amount_usd)} · {formatFC(p.amount_usd*rate)}</span><Button size="icon" variant="ghost" className="h-7 w-7" title="Modifier l’encaissement" onClick={()=>receive(t,p)}><Pencil /></Button><Button size="icon" variant="ghost" className="h-7 w-7" title="Supprimer l’encaissement" onClick={()=>removePayment(p)}><Trash2 /></Button></div>)}</div>}
+      </CardContent></Card>;
+    })}</div>}
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{form.id ? "Modifier le locataire" : "Nouveau locataire"}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label htmlFor="tenant-name">Nom / bien loué</Label><Input id="tenant-name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} /></div><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="expected">Loyer mensuel ($)</Label><Input id="expected" inputMode="decimal" value={form.expected} onChange={e=>setForm({...form,expected:e.target.value})} /></div><div><Label htmlFor="due-day">Jour d’échéance</Label><Input id="due-day" type="number" min="1" max="31" value={form.day} onChange={e=>setForm({...form,day:e.target.value})} /></div></div><div><Label htmlFor="tenant-note">Note</Label><Input id="tenant-note" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} /></div></div><DialogFooter><Button onClick={save} disabled={busy}>Enregistrer</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent><DialogHeader><DialogTitle>{payment.id ? "Modifier l’encaissement" : "Encaisser un loyer"} · {tenants.find(t=>t.id===payment.tenantId)?.name}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label htmlFor="payment-amount">Montant reçu ($)</Label><Input id="payment-amount" inputMode="decimal" value={payment.amount} onChange={e=>setPayment({...payment,amount:e.target.value})} /><p className="mt-2 text-sm text-muted-foreground">{formatFC((Number.isFinite(num(payment.amount)) ? num(payment.amount) : 0)*rate)}</p></div><div><Label htmlFor="payment-date">Date de réception</Label><Input id="payment-date" type="date" value={payment.date} onChange={e=>setPayment({...payment,date:e.target.value})} /></div><div><Label htmlFor="payment-note">Note</Label><Input id="payment-note" value={payment.note} onChange={e=>setPayment({...payment,note:e.target.value})} /></div></div><DialogFooter><Button disabled={busy} onClick={savePayment}>Enregistrer l’encaissement</Button></DialogFooter></DialogContent></Dialog>
+  </div>;
 }

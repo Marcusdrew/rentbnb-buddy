@@ -15,6 +15,7 @@ export type Tenant = {
   received_usd: number;
   note: string | null;
   created_at: string;
+  due_day: number;
 };
 
 export type Expense = {
@@ -25,6 +26,7 @@ export type Expense = {
   amount_usd: number;
   amount_fc: number;
   paid: boolean;
+  expense_date: string;
   note: string | null;
   created_at: string;
 };
@@ -62,6 +64,16 @@ export const expensesQuery = queryOptions({
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data ?? []) as Expense[];
+  },
+});
+
+export type RentalPayment = { id: string; tenant_id: string; user_id: string; amount_usd: number; received_date: string; note: string | null };
+export const paymentsQuery = queryOptions({
+  queryKey: ["rental_payments"],
+  queryFn: async (): Promise<RentalPayment[]> => {
+    const { data, error } = await supabase.from("rental_payments").select("*").order("received_date", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
   },
 });
 

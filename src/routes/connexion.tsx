@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BookOpenText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import logo from "@/assets/mon-carnet-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,9 +83,7 @@ function ConnexionPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
-            <BookOpenText className="h-7 w-7" />
-          </div>
+          <img src={logo} alt="Logo Mon Carnet" width={96} height={96} className="mb-4 h-24 w-24 object-contain" />
           <h1 className="text-3xl font-semibold text-foreground">Mon Carnet</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Loyers, revenus et budget de la maison — en un seul endroit.
@@ -132,7 +131,8 @@ function ConnexionPage() {
                 {mode === "login" ? "Se connecter" : "Créer le compte"}
               </Button>
             </form>
-            <button
+            <Button
+              variant="link"
               type="button"
               onClick={() => setMode(mode === "login" ? "signup" : "login")}
               className="mt-4 w-full text-center text-sm text-primary underline-offset-4 hover:underline"
@@ -140,7 +140,7 @@ function ConnexionPage() {
               {mode === "login"
                 ? "Pas encore de compte ? Créez-le ici"
                 : "Déjà un compte ? Connectez-vous"}
-            </button>
+            </Button>
           </CardContent>
         </Card>
       </div>

@@ -5,9 +5,12 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { settingsQuery, tenantsQuery, expensesQuery, type Expense } from "@/lib/data";
+import { settingsQuery, paymentsQuery, expensesQuery, type Expense } from "@/lib/data";
 import { SEED_EXPENSES, CATEGORIES } from "@/lib/seed";
 import { formatUSD, formatFC, fcToUsd } from "@/lib/format";
+import { localDate, inMonth, expenseUsd, monthlyIncome, displayDate } from "@/lib/monthly";
+import { useMonth } from "@/components/month-picker";
+import { BudgetRing } from "@/components/budget-ring";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +59,9 @@ type FormState = {
   usd: string;
   fc: string;
   note: string;
+  date: string;
 };
-const EMPTY: FormState = { category: "Alimentation", label: "", usd: "", fc: "", note: "" };
+const EMPTY: FormState = { category: "Alimentation", label: "", usd: "", fc: "", note: "", date: localDate() };
 
 function num(v: string) {
   const n = Number(v.replace(/\s/g, "").replace(",", "."));
@@ -67,8 +71,10 @@ function num(v: string) {
 function BudgetPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { data: expenses } = useSuspenseQuery(expensesQuery);
-  const { data: tenants } = useSuspenseQuery(tenantsQuery);
+  const { month } = useMonth();
+  const { data: allExpenses } = useSuspenseQuery(expensesQuery);
+  const { data: payments } = useSuspenseQuery(paymentsQuery);
+  const expenses = useMemo(() => allExpenses.filter(e => inMonth(e.expense_date, month)), [allExpenses, month]);
   const { data: settings } = useSuspenseQuery(settingsQuery);
   const rate = settings?.usd_fc_rate ?? 2300;
 
@@ -77,13 +83,12 @@ function BudgetPage() {
   const [busy, setBusy] = useState(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["expenses"] });
-  const costUsd = (e: Expense) => e.amount_usd + fcToUsd(e.amount_fc, rate);
+  const costUsd = (e: Expense) => expenseUsd(e, rate);
 
-  const income = tenants.reduce((s, t) => s + t.received_usd, 0);
+  const income = monthlyIncome(payments, month);
   const total = expenses.reduce((s, e) => s + costUsd(e), 0);
   const paidTotal = expenses.filter((e) => e.paid).reduce((s, e) => s + costUsd(e), 0);
   const balance = income - total;
-  const used = income > 0 ? Math.min((total / income) * 100, 100) : 0;
 
   const grouped = useMemo(() => {
     const map = new Map<string, Expense[]>();
@@ -96,7 +101,7 @@ function BudgetPage() {
   }, [expenses]);
 
   function openNew() {
-    setForm(EMPTY);
+    setForm({ ...EMPTY, date: localDate().startsWith(month) ? localDate() : `${month}-01` });
     setOpen(true);
   }
   function openEdit(e: Expense) {
@@ -107,6 +112,7 @@ function BudgetPage() {
       usd: e.amount_usd ? String(e.amount_usd) : "",
       fc: e.amount_fc ? String(e.amount_fc) : "",
       note: e.note ?? "",
+      date: e.expense_date,
     });
     setOpen(true);
   }
@@ -116,6 +122,7 @@ function BudgetPage() {
       toast.error("Indiquez le nom de la dépense.");
       return;
     }
+    if (!form.date || num(form.usd) < 0 || num(form.fc) < 0) { toast.error("Indiquez une date et un montant positif."); return; }
     setBusy(true);
     const payload = {
       category: form.category,
@@ -123,6 +130,7 @@ function BudgetPage() {
       amount_usd: num(form.usd),
       amount_fc: num(form.fc),
       note: form.note.trim() || null,
+      expense_date: form.date,
     };
     const { error } = form.id
       ? await supabase.from("expenses").update(payload).eq("id", form.id)
@@ -151,63 +159,30 @@ function BudgetPage() {
     if (!user) return;
     const { error } = await supabase
       .from("expenses")
-      .insert(SEED_EXPENSES.map((e) => ({ ...e, user_id: user.id })));
+      .insert(SEED_EXPENSES.map((e) => ({ ...e, expense_date: `${month}-01`, user_id: user.id })));
     if (error) { toast.error(error.message); return; }
     refresh();
     toast.success("Dépenses de votre fichier importées");
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 page-enter">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Budget de la maison</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Chaque chose avec son prix — le solde bouge à chaque dépense.
-          </p>
+          <p className="section-kicker">MES DÉPENSES</p><h1 className="mt-2 text-3xl font-semibold">Budget de la maison</h1>
+
         </div>
         <Button onClick={openNew}>
           <Plus className="mr-1 h-4 w-4" /> Ajouter une dépense
         </Button>
       </div>
 
-      <Card className="border-primary/30">
-        <CardContent className="space-y-4 px-5 py-5">
-          <div className="grid gap-4 text-sm sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Revenus (loyers reçus)</p>
-              <p className="font-display text-xl font-semibold text-success">{formatUSD(income)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total des dépenses</p>
-              <p className="font-display text-xl font-semibold text-destructive">{formatUSD(total)}</p>
-              <p className="text-[11px] text-muted-foreground">{formatFC(total * rate)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Déjà payé</p>
-              <p className="font-display text-xl font-semibold">{formatUSD(paidTotal)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Solde</p>
-              <p className={`font-display text-xl font-semibold ${balance >= 0 ? "text-primary" : "text-destructive"}`}>
-                {formatUSD(balance)}
-              </p>
-              <p className="text-[11px] text-muted-foreground">{formatFC(balance * rate)}</p>
-            </div>
-          </div>
-          <div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full rounded-full transition-all ${used >= 100 ? "bg-destructive" : "bg-primary"}`}
-                style={{ width: `${used}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {income > 0 ? `${Math.round((total / income) * 100)} % des revenus dépensés` : "Ajoutez vos loyers pour voir la part dépensée"}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="flex flex-wrap items-center justify-between gap-6 border-y border-border py-6">
+        <BudgetRing income={income} expenses={total} />
+        <div className="grid flex-1 grid-cols-2 gap-6 min-w-60">
+          {[{ label: "Revenus reçus", value: income }, { label: "Total des dépenses", value: total }, { label: "Déjà payé", value: paidTotal }, { label: "Solde du mois", value: balance }].map(v => <div key={v.label}><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 text-2xl font-semibold ${v.value < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(v.value)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(v.value * rate)}</p></div>)}
+        </div>
+      </section>
 
       {expenses.length === 0 ? (
         <Card>
@@ -226,28 +201,27 @@ function BudgetPage() {
               <div key={cat}>
                 <div className="mb-2 flex items-baseline justify-between px-1">
                   <h2 className="text-lg font-semibold">{cat}</h2>
-                  <span className="text-sm font-medium text-muted-foreground">{formatUSD(sub)}</span>
+                  <span className="text-right text-sm font-medium">{formatUSD(sub)}<span className="block text-xs text-muted-foreground">{formatFC(sub * rate)}</span></span>
                 </div>
                 <Card>
                   <CardContent className="divide-y divide-border p-0">
                     {items.map((e) => (
-                      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                        <Checkbox checked={e.paid} onCheckedChange={() => togglePaid(e)} title="Payé" />
-                        <div className="min-w-0 flex-1">
+                      <div key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-4">
+                        <Checkbox checked={e.paid} onCheckedChange={() => togglePaid(e)} title="Payé" aria-label={`Marquer ${e.label} payé`} />
+                        <div className="min-w-28 flex-1">
                           <p className={`truncate text-sm ${e.paid ? "text-muted-foreground line-through" : ""}`}>
                             {e.label}
                           </p>
-                          {e.note && <p className="truncate text-xs text-muted-foreground">{e.note}</p>}
+                          <p className="mt-1 text-xs text-muted-foreground">{displayDate(e.expense_date)}{e.note ? ` · ${e.note}` : ""}</p>
                         </div>
                         <div className="text-right text-sm">
-                          {e.amount_usd > 0 && <p className="font-medium">{formatUSD(e.amount_usd)}</p>}
-                          {e.amount_fc > 0 && <p className="text-xs text-muted-foreground">{formatFC(e.amount_fc)}</p>}
-                          {e.amount_usd === 0 && e.amount_fc === 0 && <p className="text-xs text-muted-foreground">—</p>}
+                          <p className="font-semibold">{formatUSD(costUsd(e))}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{formatFC(costUsd(e) * rate)}</p>
                         </div>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(e)}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Modifier la dépense" onClick={() => openEdit(e)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => remove(e)}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Supprimer la dépense" onClick={() => remove(e)}>
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
                         </Button>
                       </div>
@@ -281,18 +255,19 @@ function BudgetPage() {
               <Label>Dépense</Label>
               <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="ex. Makala" />
             </div>
+            <div className="space-y-2"><Label htmlFor="expense-date">Date de la dépense</Label><Input id="expense-date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Prix en $</Label>
-                <Input inputMode="decimal" value={form.usd} onChange={(e) => setForm({ ...form, usd: e.target.value })} />
+                <Label htmlFor="expense-usd">Prix en $</Label>
+                <Input id="expense-usd" inputMode="decimal" value={form.usd} onChange={(e) => setForm({ ...form, usd: e.target.value, fc: "" })} />
               </div>
               <div className="space-y-2">
-                <Label>ou en FC</Label>
-                <Input inputMode="decimal" value={form.fc} onChange={(e) => setForm({ ...form, fc: e.target.value })} />
+                <Label htmlFor="expense-fc">ou en FC</Label>
+                <Input id="expense-fc" inputMode="decimal" value={form.fc} onChange={(e) => setForm({ ...form, fc: e.target.value, usd: "" })} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Remplissez l'un ou l'autre : les FC sont convertis au taux de {rate} FC pour 1 $.
+              {formatUSD(num(form.usd) + fcToUsd(num(form.fc), rate))} = {formatFC((num(form.usd) + fcToUsd(num(form.fc), rate)) * rate)}
             </p>
             <div className="space-y-2">
               <Label>Note (facultatif)</Label>

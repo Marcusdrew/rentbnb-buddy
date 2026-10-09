@@ -20,6 +20,7 @@ export type Database = {
           amount_usd: number
           category: string
           created_at: string
+          expense_date: string
           id: string
           label: string
           note: string | null
@@ -31,6 +32,7 @@ export type Database = {
           amount_usd?: number
           category?: string
           created_at?: string
+          expense_date?: string
           id?: string
           label: string
           note?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           amount_usd?: number
           category?: string
           created_at?: string
+          expense_date?: string
           id?: string
           label?: string
           note?: string | null
@@ -49,6 +52,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      rental_payments: {
+        Row: {
+          amount_usd: number
+          created_at: string
+          id: string
+          note: string | null
+          received_date: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          amount_usd?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          received_date?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          amount_usd?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          received_date?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {
@@ -77,6 +118,7 @@ export type Database = {
       tenants: {
         Row: {
           created_at: string
+          due_day: number
           expected_usd: number
           id: string
           name: string
@@ -86,6 +128,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          due_day?: number
           expected_usd?: number
           id?: string
           name: string
@@ -95,6 +138,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          due_day?: number
           expected_usd?: number
           id?: string
           name?: string
