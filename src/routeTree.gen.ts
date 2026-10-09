@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as ConnexionRouteImport } from './routes/connexion'
+import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated.budget'
+import { Route as AuthenticatedLoyersRouteImport } from './routes/_authenticated.loyers'
 import { Route as AuthenticatedTableauRouteImport } from './routes/_authenticated.tableau'
 
 const IndexRoute = IndexRouteImport.update({
@@ -28,6 +30,16 @@ const ConnexionRoute = ConnexionRouteImport.update({
   path: '/connexion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedBudgetRoute = AuthenticatedBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedLoyersRoute = AuthenticatedLoyersRouteImport.update({
+  id: '/loyers',
+  path: '/loyers',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedTableauRoute = AuthenticatedTableauRouteImport.update({
   id: '/tableau',
   path: '/tableau',
@@ -37,11 +49,15 @@ const AuthenticatedTableauRoute = AuthenticatedTableauRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/connexion': typeof ConnexionRoute
+  '/budget': typeof AuthenticatedBudgetRoute
+  '/loyers': typeof AuthenticatedLoyersRoute
   '/tableau': typeof AuthenticatedTableauRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/connexion': typeof ConnexionRoute
+  '/budget': typeof AuthenticatedBudgetRoute
+  '/loyers': typeof AuthenticatedLoyersRoute
   '/tableau': typeof AuthenticatedTableauRoute
 }
 export interface FileRoutesById {
@@ -49,18 +65,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/connexion': typeof ConnexionRoute
+  '/_authenticated/budget': typeof AuthenticatedBudgetRoute
+  '/_authenticated/loyers': typeof AuthenticatedLoyersRoute
   '/_authenticated/tableau': typeof AuthenticatedTableauRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/connexion' | '/tableau'
+  fullPaths: '/' | '/connexion' | '/budget' | '/loyers' | '/tableau'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connexion' | '/tableau'
+  to: '/' | '/connexion' | '/budget' | '/loyers' | '/tableau'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/connexion'
+    | '/_authenticated/budget'
+    | '/_authenticated/loyers'
     | '/_authenticated/tableau'
   fileRoutesById: FileRoutesById
 }
@@ -93,6 +113,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnexionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/budget': {
+      id: '/_authenticated/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof AuthenticatedBudgetRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/loyers': {
+      id: '/_authenticated/loyers'
+      path: '/loyers'
+      fullPath: '/loyers'
+      preLoaderRoute: typeof AuthenticatedLoyersRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/tableau': {
       id: '/_authenticated/tableau'
       path: '/tableau'
@@ -104,10 +138,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRoute
+  AuthenticatedLoyersRoute: typeof AuthenticatedLoyersRoute
   AuthenticatedTableauRoute: typeof AuthenticatedTableauRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedBudgetRoute: AuthenticatedBudgetRoute,
+  AuthenticatedLoyersRoute: AuthenticatedLoyersRoute,
   AuthenticatedTableauRoute: AuthenticatedTableauRoute,
 }
 
