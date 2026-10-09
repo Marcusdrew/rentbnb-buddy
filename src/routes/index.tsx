@@ -1,24 +1,45 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { BookOpenText } from "lucide-react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Mon Carnet — Loyers & Budget familial" },
+      {
+        name: "description",
+        content:
+          "Carnet personnel de loyers et budget familial : locataires, revenus, dépenses de la maison et solde en USD et francs congolais.",
+      },
+      { property: "og:title", content: "Mon Carnet — Loyers & Budget familial" },
+      {
+        property: "og:description",
+        content:
+          "Suivez vos locataires, vos revenus et vos dépenses de la maison, avec conversion USD/FC automatique.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
+  const { session, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (loading) return;
+    navigate({ to: session ? "/tableau" : "/connexion", replace: true });
+  }, [loading, session, navigate]);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+        <BookOpenText className="h-10 w-10 animate-pulse text-primary" />
+        <p className="text-sm">Ouverture de votre carnet…</p>
+      </div>
     </div>
   );
 }
