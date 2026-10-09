@@ -8,3 +8,7 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep the selected calendar month in the authenticated layout context so every carnet view uses the same period.
+- Use dated rental_payments as the source of received income, not the deprecated tenants.received_usd total, to preserve monthly history.
+- Keep monthly filtering, conversion and due-date calculations in the shared monthly module so summaries and ledgers agree.
