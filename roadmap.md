@@ -1,5 +1,5 @@
 # Améliorations Mon Carnet
-- [ ] Suivi mensuel et dates individuelles des encaissements et dépenses.
-- [ ] Affichage des dépenses en USD et FC.
-- [ ] Logo, anneau animé et présentation améliorée.
-- [ ] Tests des calculs et vérification des écrans.
+- [x] Suivi mensuel et dates individuelles des encaissements et dépenses.
+- [x] Affichage des dépenses en USD et FC.
+- [x] Logo, anneau animé et présentation améliorée.
+- [x] Tests des calculs et vérification des écrans.
