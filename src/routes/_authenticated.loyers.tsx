@@ -94,7 +94,7 @@ function LoyersPage() {
       ? await supabase.from("tenants").update(payload).eq("id", form.id)
       : await supabase.from("tenants").insert({ ...payload, user_id: user.id });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setOpen(false);
     refresh();
     toast.success(form.id ? "Locataire modifié" : "Locataire ajouté");
@@ -103,7 +103,7 @@ function LoyersPage() {
   async function remove(t: Tenant) {
     if (!confirm(`Supprimer ${t.name} ?`)) return;
     const { error } = await supabase.from("tenants").delete().eq("id", t.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
   }
 
@@ -112,7 +112,7 @@ function LoyersPage() {
       .from("tenants")
       .update({ received_usd: t.expected_usd })
       .eq("id", t.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
     toast.success(`${t.name} : loyer encaissé`);
   }
@@ -122,7 +122,7 @@ function LoyersPage() {
     const { error } = await supabase
       .from("tenants")
       .insert(SEED_TENANTS.map((t) => ({ ...t, user_id: user.id })));
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
     toast.success("Locataires de votre fichier importés");
   }

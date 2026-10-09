@@ -128,7 +128,7 @@ function BudgetPage() {
       ? await supabase.from("expenses").update(payload).eq("id", form.id)
       : await supabase.from("expenses").insert({ ...payload, user_id: user.id });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setOpen(false);
     refresh();
     toast.success(form.id ? "Dépense modifiée" : "Dépense ajoutée");
@@ -136,14 +136,14 @@ function BudgetPage() {
 
   async function togglePaid(e: Expense) {
     const { error } = await supabase.from("expenses").update({ paid: !e.paid }).eq("id", e.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
   }
 
   async function remove(e: Expense) {
     if (!confirm(`Supprimer « ${e.label} » ?`)) return;
     const { error } = await supabase.from("expenses").delete().eq("id", e.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
   }
 
@@ -152,7 +152,7 @@ function BudgetPage() {
     const { error } = await supabase
       .from("expenses")
       .insert(SEED_EXPENSES.map((e) => ({ ...e, user_id: user.id })));
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     refresh();
     toast.success("Dépenses de votre fichier importées");
   }
