@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { oauthReturnPath } from "@/lib/oauth-return-path";
 import logo from "@/assets/mon-carnet-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,20 +34,28 @@ export const Route = createFileRoute("/connexion")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   component: ConnexionPage,
 });
 
 function ConnexionPage() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  const { next: rawNext } = Route.useSearch();
+  const next = rawNext ? oauthReturnPath(rawNext) : null;
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && session) navigate({ to: "/tableau", replace: true });
-  }, [loading, session, navigate]);
+    if (!loading && session) {
+      if (next && next !== "/") window.location.replace(next);
+      else navigate({ to: "/tableau", replace: true });
+    }
+  }, [loading, session, navigate, next]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +72,7 @@ function ConnexionPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: next ? new URL(next, window.location.origin).href : window.location.origin },
         });
         if (error) throw error;
         toast.success(
