@@ -34,9 +34,8 @@ export const Route = createFileRoute("/connexion")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  validateSearch: (s: Record<string, unknown>) => ({
-    next: typeof s.next === "string" ? s.next : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): { next?: string } =>
+    typeof s["next"] === "string" ? { next: s["next"] } : {},
   component: ConnexionPage,
 });
 

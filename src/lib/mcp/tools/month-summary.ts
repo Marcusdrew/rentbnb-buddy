@@ -10,7 +10,8 @@ export default defineTool({
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ month }, ctx) => {
     const sb = supabaseForUser(ctx);
-    const [y, m] = month.split("-").map(Number);
+    const y = Number(month.slice(0, 4));
+    const m = Number(month.slice(5, 7));
     const start = `${month}-01`;
     const end = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
     const [settings, pays, exps] = await Promise.all([
