@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "sdk_version": "3.0.5",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://kmrdptyskrboepdwdqlw.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "rentbnb-buddy",
+      "version": "0.1.0",
+      "title": "Rentbnb Buddy"
+    },
+    "tools": [
+      {
+        "name": "list_tenants",
+        "title": "Lister les locataires",
+        "description": "Liste les locataires du carnet avec leur loyer attendu (USD) et jour d'échéance.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "month_summary",
+        "title": "Résumé du mois",
+        "description": "Loyers encaissés, dépenses et solde (USD et FC) pour un mois donné (AAAA-MM).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "month": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$",
+              "description": "Mois au format AAAA-MM"
+            }
+          },
+          "required": [
+            "month"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_expense",
+        "title": "Ajouter une dépense",
+        "description": "Ajoute une dépense de la maison (montant en USD et/ou FC) au budget.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Libellé, ex. « Makala »"
+            },
+            "category": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Catégorie, ex. « Alimentation »"
+            },
+            "amount_usd": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0
+            },
+            "amount_fc": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0
+            },
+            "expense_date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date AAAA-MM-JJ"
+            },
+            "paid": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "label",
+            "category",
+            "expense_date"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "record_payment",
+        "title": "Enregistrer un loyer reçu",
+        "description": "Enregistre un paiement de loyer reçu d'un locataire, à une date donnée.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "tenant_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Identifiant du locataire (voir list_tenants)"
+            },
+            "amount_usd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "received_date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date AAAA-MM-JJ"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tenant_id",
+            "amount_usd",
+            "received_date"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
