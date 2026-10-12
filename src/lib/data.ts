@@ -67,7 +67,7 @@ export const expensesQuery = queryOptions({
   },
 });
 
-export type RentalPayment = { id: string; tenant_id: string; user_id: string; amount_usd: number; received_date: string; note: string | null };
+export type RentalPayment = { id: string; tenant_id: string; user_id: string; amount_usd: number; received_date: string; note: string | null; covered_months: string[] };
 export const paymentsQuery = queryOptions({
   queryKey: ["rental_payments"],
   queryFn: async (): Promise<RentalPayment[]> => {
