@@ -17,13 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -81,6 +74,8 @@ function BudgetPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["expenses"] });
   const costUsd = (e: Expense) => expenseUsd(e, rate);
@@ -165,29 +160,59 @@ function BudgetPage() {
     toast.success("Dépenses de votre fichier importées");
   }
 
+  async function removeMany(ids: string[], msg: string) {
+    if (ids.length === 0 || !confirm(msg)) return;
+    const { error } = await supabase.from("expenses").delete().in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    setSelected(new Set());
+    setSelecting(false);
+    refresh();
+    toast.success(`${ids.length} dépense(s) supprimée(s)`);
+  }
+  const toggleSel = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
   return (
     <div className="space-y-6 page-enter">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="section-kicker">MES DÉPENSES</p><h1 className="mt-2 text-3xl font-semibold">Budget de la maison</h1>
-
+          <p className="section-kicker">MES DÉPENSES</p><h1 className="mt-2 text-2xl font-semibold sm:text-3xl">Budget de la maison</h1>
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={openNew} className="w-full sm:w-auto">
           <Plus className="mr-1 h-4 w-4" /> Ajouter une dépense
         </Button>
       </div>
 
-      <section className="flex flex-wrap items-center justify-between gap-6 border-y border-border py-6">
+      <section className="flex flex-col items-center gap-6 border-y border-border py-6 sm:flex-row sm:justify-between">
         <BudgetRing income={income} expenses={total} />
-        <div className="grid flex-1 grid-cols-2 gap-6 min-w-60">
-          {[{ label: "Revenus reçus", value: income }, { label: "Total des dépenses", value: total }, { label: "Déjà payé", value: paidTotal }, { label: "Solde du mois", value: balance }].map(v => <div key={v.label}><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 text-2xl font-semibold ${v.value < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(v.value)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(v.value * rate)}</p></div>)}
+        <div className="grid w-full flex-1 grid-cols-2 gap-4 sm:gap-6">
+          {[{ label: "Revenus reçus", value: income }, { label: "Total des dépenses", value: total }, { label: "Déjà payé", value: paidTotal }, { label: "Solde du mois", value: balance }].map(v => <div key={v.label} className="min-w-0"><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 truncate text-xl font-semibold sm:text-2xl ${v.value < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(v.value)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{formatFC(v.value * rate)}</p></div>)}
         </div>
       </section>
+
+      {expenses.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setSelecting(!selecting); setSelected(new Set()); }}>
+            {selecting ? "Annuler la sélection" : "Sélectionner pour supprimer"}
+          </Button>
+          {selecting && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setSelected(new Set(expenses.map((e) => e.id)))}>Tout sélectionner</Button>
+              <Button variant="destructive" size="sm" disabled={selected.size === 0} onClick={() => removeMany([...selected], `Supprimer ${selected.size} dépense(s) ?`)}>
+                <Trash2 className="mr-1 h-4 w-4" /> Supprimer ({selected.size})
+              </Button>
+            </>
+          )}
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => removeMany(expenses.map((e) => e.id), "Réinitialiser : supprimer TOUTES les dépenses de ce mois ?")}>
+            Réinitialiser le mois
+          </Button>
+        </div>
+      )}
 
       {expenses.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <p className="text-muted-foreground">Aucune dépense pour l'instant.</p>
+            <p className="text-muted-foreground">Aucune dépense pour ce mois.</p>
+            <Button onClick={openNew}><Plus className="mr-1 h-4 w-4" /> Ajouter une dépense</Button>
             <Button variant="outline" onClick={importSeed}>
               <Download className="mr-1 h-4 w-4" /> Reprendre les dépenses de mon fichier Excel
             </Button>
@@ -199,16 +224,18 @@ function BudgetPage() {
             const sub = items.reduce((s, e) => s + costUsd(e), 0);
             return (
               <div key={cat}>
-                <div className="mb-2 flex items-baseline justify-between px-1">
-                  <h2 className="text-lg font-semibold">{cat}</h2>
-                  <span className="text-right text-sm font-medium">{formatUSD(sub)}<span className="block text-xs text-muted-foreground">{formatFC(sub * rate)}</span></span>
+                <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="min-w-0 truncate text-lg font-semibold">{cat}</h2>
+                  <span className="shrink-0 text-right text-sm font-medium">{formatUSD(sub)}<span className="block text-xs text-muted-foreground">{formatFC(sub * rate)}</span></span>
                 </div>
                 <Card>
                   <CardContent className="divide-y divide-border p-0">
                     {items.map((e) => (
-                      <div key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-4">
-                        <Checkbox checked={e.paid} onCheckedChange={() => togglePaid(e)} title="Payé" aria-label={`Marquer ${e.label} payé`} />
-                        <div className="min-w-28 flex-1">
+                      <div key={e.id} className="flex items-center gap-2 px-3 py-3 sm:px-4 sm:py-4">
+                        {selecting
+                          ? <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleSel(e.id)} aria-label={`Sélectionner ${e.label}`} className="border-destructive" />
+                          : <Checkbox checked={e.paid} onCheckedChange={() => togglePaid(e)} title="Payé" aria-label={`Marquer ${e.label} payé`} />}
+                        <div className="min-w-0 flex-1">
                           <p className={`truncate text-sm ${e.paid ? "text-muted-foreground line-through" : ""}`}>
                             {e.label}
                           </p>
@@ -241,15 +268,13 @@ function BudgetPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Catégorie</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="expense-cat">Catégorie (choisissez ou écrivez la vôtre)</Label>
+              <Input id="expense-cat" list="expense-cats" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <datalist id="expense-cats">
+                {[...new Set([...CATEGORIES, ...allExpenses.map((e) => e.category)])].map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
             <div className="space-y-2">
               <Label>Dépense</Label>
