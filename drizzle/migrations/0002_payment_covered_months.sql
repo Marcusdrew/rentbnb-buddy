@@ -1,0 +1,1 @@
+ALTER TABLE public.rental_payments ADD COLUMN IF NOT EXISTS covered_months text[] NOT NULL DEFAULT '{}';
