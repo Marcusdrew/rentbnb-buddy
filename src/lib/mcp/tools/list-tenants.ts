@@ -10,7 +10,7 @@ export default defineTool({
   handler: async (_input, ctx) => {
     const { data, error } = await supabaseForUser(ctx)
       .from("tenants")
-      .select("id, name, expected_usd, due_day, note")
+      .select("id, name, expected_usd, due_day, note").eq("archived", false)
       .order("created_at");
     if (error) throw new ToolError(error.message);
     const tenants = (data ?? []).map((t) => ({

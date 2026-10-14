@@ -120,6 +120,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          archived: boolean
           created_at: string
           due_day: number
           expected_usd: number
@@ -130,6 +131,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived?: boolean
           created_at?: string
           due_day?: number
           expected_usd?: number
@@ -140,6 +142,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived?: boolean
           created_at?: string
           due_day?: number
           expected_usd?: number

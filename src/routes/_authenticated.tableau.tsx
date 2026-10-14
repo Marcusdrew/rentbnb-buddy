@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { settingsQuery, tenantsQuery, expensesQuery, paymentsQuery, ensureSettings } from "@/lib/data";
 import { formatUSD, formatFC } from "@/lib/format";
-import { inMonth, expenseUsd, monthlyIncome, displayDate, dueDate, generalBalance, previousMonth } from "@/lib/monthly";
+import { inMonth, expenseUsd, monthlyIncome, displayDate, generalBalance, previousMonth } from "@/lib/monthly";
 import { useMonth } from "@/components/month-picker";
 import { BudgetRing } from "@/components/budget-ring";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +47,6 @@ function TableauPage() {
   const [rateInput, setRateInput] = useState("");
   const rate = settings?.usd_fc_rate ?? 2300;
   const expenses = allExpenses.filter(e => inMonth(e.expense_date, month));
-  const expected = tenants.reduce((s, t) => s + t.expected_usd, 0);
   const received = monthlyIncome(payments, month);
   const spent = expenses.reduce((s, e) => s + expenseUsd(e, rate), 0);
   const balance = received - spent;
@@ -56,9 +55,10 @@ function TableauPage() {
   const monthName = new Intl.DateTimeFormat("fr", { month: "long" }).format(new Date(`${month}-15T12:00:00`));
   const totalIn = payments.filter(p => p.received_date.slice(0, 7) <= month).reduce((s, p) => s + Number(p.amount_usd), 0);
   const totalOut = allExpenses.filter(e => e.expense_date.slice(0, 7) <= month).reduce((s, e) => s + expenseUsd(e, rate), 0);
-  const waiting = tenants.map(t => ({ ...t, remaining: Math.max(0, t.expected_usd - payments.filter(p => p.tenant_id === t.id && inMonth(p.received_date, month)).reduce((s, p) => s + p.amount_usd, 0)) })).filter(t => t.remaining > 0).sort((a, b) => a.due_day - b.due_day);
+  const tenantName = (id: string) => tenants.find(t => t.id === id)?.name ?? "Ancien locataire";
+  const recentRents = [...payments].sort((a, b) => b.received_date.localeCompare(a.received_date)).slice(0, 5);
   const movements = [
-    ...payments.filter(p => inMonth(p.received_date, month)).map(p => ({ id: p.id, label: tenants.find(t => t.id === p.tenant_id)?.name ?? "Loyer", date: p.received_date, amount: p.amount_usd, income: true })),
+    ...payments.filter(p => inMonth(p.received_date, month)).map(p => ({ id: p.id, label: tenantName(p.tenant_id), date: p.received_date, amount: p.amount_usd, income: true })),
     ...expenses.map(e => ({ id: e.id, label: e.label, date: e.expense_date, amount: expenseUsd(e, rate), income: false })),
   ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
   async function saveRate() {
@@ -83,11 +83,11 @@ function TableauPage() {
       <div className="space-y-6 md:pl-8"><div className="flex items-start gap-3"><span className="stat-icon bg-success/10 text-success"><ArrowDownLeft /></span><div><p className="text-sm text-muted-foreground">Loyers encaissés en {monthName}</p><p className="mt-1 text-2xl font-semibold text-success">{formatUSD(received)}</p><p className="text-sm text-muted-foreground">{formatFC(received * rate)}</p></div></div><div className="flex items-start gap-3"><span className="stat-icon bg-destructive/10 text-destructive"><ArrowUpRight /></span><div><p className="text-sm text-muted-foreground">Dépenses en {monthName}</p><p className="mt-1 text-2xl font-semibold">{formatUSD(spent)}</p><p className="text-sm text-muted-foreground">{formatFC(spent * rate)}</p></div></div></div>
     </section>
     <div className="grid gap-4 sm:grid-cols-3">{[
-      { label: `Loyers attendus pour ${monthName}`, value: expected, sub: `${tenants.length} locataires`, icon: CalendarClock },
-      { label: `Reste à encaisser pour ${monthName}`, value: waiting.reduce((s,t) => s+t.remaining,0), sub: `${waiting.length} en attente`, icon: ArrowDownLeft },
+      { label: "Total des loyers encaissés", value: totalIn, sub: `${tenants.length} locataires`, icon: CalendarClock },
+      { label: "Total des dépenses", value: totalOut, sub: "depuis le début", icon: ArrowUpRight },
       { label: `Dépenses payées en ${monthName}`, value: expenses.filter(e => e.paid).reduce((s,e) => s+expenseUsd(e,rate),0), sub: `${expenses.filter(e=>e.paid).length} sur ${expenses.length} dépenses`, icon: Check },
     ].map(({ label,value,sub,icon: Icon }) => <Card key={label} className="summary-card"><CardContent className="p-5"><div className="flex items-center justify-between text-muted-foreground"><span className="text-sm">{label}</span><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-semibold">{formatUSD(value)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(value*rate)} · {sub}</p></CardContent></Card>)}</div>
     <div className="grid gap-8 md:grid-cols-2"><section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">Derniers mouvements</h2><span className="text-xs text-muted-foreground">Ce mois-ci</span></div>{movements.length === 0 ? <p className="empty-note">Aucun mouvement ce mois-ci.</p> : <div className="divide-y divide-border">{movements.map(m => <div key={m.id} className="flex items-center gap-3 py-4"><span className={`stat-icon ${m.income ? "bg-success/10 text-success" : "bg-secondary text-muted-foreground"}`}>{m.income ? <ArrowDownLeft /> : <ArrowUpRight />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{m.label}</p><p className="mt-1 text-xs text-muted-foreground">{displayDate(m.date)} · {m.income ? "Loyer reçu" : "Dépense"}</p></div><div className="shrink-0 text-right"><p className={`text-sm font-semibold ${m.income ? "text-success" : ""}`}>{m.income ? "+" : "−"}{formatUSD(m.amount)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(m.amount*rate)}</p></div></div>)}</div>}</section>
-    <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">Loyers de {monthName} à encaisser</h2><Button asChild variant="ghost" size="sm"><Link to="/loyers">Voir tout <ArrowRight /></Link></Button></div>{waiting.length === 0 ? <p className="empty-note">Aucun loyer en attente.</p> : <div className="divide-y divide-border">{waiting.slice(0,5).map(t => <div key={t.id} className="flex items-center justify-between gap-3 py-4"><div><p className="text-sm font-medium">{t.name}</p><p className="mt-1 text-xs text-muted-foreground">Échéance : {displayDate(dueDate(month,t.due_day))}</p></div><div className="text-right"><p className="text-sm font-semibold">{formatUSD(t.remaining)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(t.remaining*rate)}</p></div></div>)}</div>}</section></div>
+    <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">Loyers encaissés</h2><Button asChild variant="ghost" size="sm"><Link to="/loyers">Voir tout <ArrowRight /></Link></Button></div>{recentRents.length === 0 ? <p className="empty-note">Aucun loyer encaissé.</p> : <div className="divide-y divide-border">{recentRents.map(p => <div key={p.id} className="flex items-center justify-between gap-3 py-4"><div><p className="text-sm font-medium">{tenantName(p.tenant_id)}</p><p className="mt-1 text-xs text-muted-foreground">Reçu le {displayDate(p.received_date)}</p></div><div className="text-right"><p className="text-sm font-semibold text-success">+{formatUSD(p.amount_usd)}</p><p className="mt-1 text-xs text-muted-foreground">{formatFC(p.amount_usd*rate)}</p></div></div>)}</div>}</section></div>
   </div>;
 }
