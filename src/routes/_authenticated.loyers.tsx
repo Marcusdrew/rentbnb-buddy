@@ -105,7 +105,7 @@ function LoyersPage() {
     const {error}= payment.id ? await supabase.from("rental_payments").update(payload).eq("id",payment.id) : await supabase.from("rental_payments").insert(payload);
     setBusy(false);if(error){toast.error(error.message);return;}setPaymentOpen(false);await refresh();toast.success("Loyer encaissé");
   }
-  async function removeTenant(t:Tenant){if(!confirm(`Retirer ${t.name} de la liste ? Ses loyers déjà encaissés restent dans votre caisse.`))return;const {error}=await supabase.from("tenants").update({archived:true}).eq("id",t.id);if(error){toast.error(error.message);return;}await refresh();toast.success("Locataire retiré");}
+  async function removeTenant(t:Tenant){if(!confirm(`Supprimer ${t.name} et tous ses loyers ? Cet argent sera retiré du solde.`))return;const p=await supabase.from("rental_payments").delete().eq("tenant_id",t.id);if(p.error){toast.error(p.error.message);return;}const {error}=await supabase.from("tenants").delete().eq("id",t.id);if(error){toast.error(error.message);return;}await refresh();toast.success("Locataire et ses loyers supprimés");}
   async function importSeed(){if(!user)return;setBusy(true);const {error}=await supabase.from("tenants").insert(SEED_TENANTS.map(t=>({name:t.name,expected_usd:t.expected_usd,user_id:user.id})));setBusy(false);if(error){toast.error(error.message);return;}await refresh();toast.success("Locataires importés.");}
   const receivedMonth=allPayments.filter(p=>inMonth(p.received_date,month)).reduce((s,p)=>s+Number(p.amount_usd),0);
   const total=allPayments.reduce((s,p)=>s+Number(p.amount_usd),0);
