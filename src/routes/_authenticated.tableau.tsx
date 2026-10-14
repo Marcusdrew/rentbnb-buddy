@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { settingsQuery, tenantsQuery, expensesQuery, paymentsQuery, ensureSettings } from "@/lib/data";
 import { formatUSD, formatFC } from "@/lib/format";
-import { inMonth, expenseUsd, monthlyIncome, displayDate, dueDate } from "@/lib/monthly";
+import { inMonth, expenseUsd, monthlyIncome, displayDate, dueDate, generalBalance, previousMonth } from "@/lib/monthly";
 import { useMonth } from "@/components/month-picker";
 import { BudgetRing } from "@/components/budget-ring";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,6 +51,8 @@ function TableauPage() {
   const received = monthlyIncome(payments, month);
   const spent = expenses.reduce((s, e) => s + expenseUsd(e, rate), 0);
   const balance = received - spent;
+  const carry = generalBalance(payments, allExpenses, rate, previousMonth(month));
+  const general = carry + balance;
   const waiting = tenants.map(t => ({ ...t, remaining: Math.max(0, t.expected_usd - payments.filter(p => p.tenant_id === t.id && inMonth(p.received_date, month)).reduce((s, p) => s + p.amount_usd, 0)) })).filter(t => t.remaining > 0).sort((a, b) => a.due_day - b.due_day);
   const movements = [
     ...payments.filter(p => inMonth(p.received_date, month)).map(p => ({ id: p.id, label: tenants.find(t => t.id === p.tenant_id)?.name ?? "Loyer", date: p.received_date, amount: p.amount_usd, income: true })),
@@ -73,7 +75,7 @@ function TableauPage() {
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>1 $ =</span>{editingRate ? <><Input aria-label="Taux de change" className="w-24" value={rateInput} onChange={e => setRateInput(e.target.value)} /><Button size="icon" title="Enregistrer le taux" onClick={saveRate}><Check /></Button></> : <><span className="font-semibold text-foreground">{formatFC(rate)}</span><Button size="icon" variant="ghost" title="Modifier le taux" onClick={() => { setRateInput(String(rate)); setEditingRate(true); }}><Pencil /></Button></>}</div>
     </div>
     <section className="balance-section grid items-center gap-6 border-y border-border py-8 md:grid-cols-[1fr_auto_1fr]">
-      <div><span className="mb-4 inline-flex items-center gap-2 text-sm text-primary"><Wallet className="h-4 w-4" /> SOLDE DU MOIS</span><p className={`font-display text-5xl font-semibold break-words ${balance < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(balance)}</p><p className="mt-3 text-lg text-muted-foreground">{formatFC(balance * rate)}</p><div className="mt-6 flex gap-2"><Button asChild><Link to="/budget">Mon budget <ArrowRight /></Link></Button><Button asChild variant="outline"><Link to="/loyers">Mes loyers</Link></Button></div></div>
+      <div><span className="mb-4 inline-flex items-center gap-2 text-sm text-primary"><Wallet className="h-4 w-4" /> SOLDE GÉNÉRAL · EN CAISSE</span><p className={`font-display text-5xl font-semibold break-words ${general < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(general)}</p><p className="mt-3 text-lg text-muted-foreground">{formatFC(general * rate)}</p><div className="mt-4 space-y-1 text-sm text-muted-foreground"><p>Report des mois précédents : <span className="font-semibold text-foreground">{formatUSD(carry)}</span> · {formatFC(carry * rate)}</p><p>Mouvement de ce mois : <span className={`font-semibold ${balance < 0 ? "text-destructive" : "text-success"}`}>{balance >= 0 ? "+" : ""}{formatUSD(balance)}</span> · {formatFC(balance * rate)}</p></div><div className="mt-6 flex flex-wrap gap-2"><Button asChild><Link to="/budget">Mon budget <ArrowRight /></Link></Button><Button asChild variant="outline"><Link to="/loyers">Mes loyers</Link></Button></div></div>
       <BudgetRing income={received} expenses={spent} />
       <div className="space-y-6 md:pl-8"><div className="flex items-start gap-3"><span className="stat-icon bg-success/10 text-success"><ArrowDownLeft /></span><div><p className="text-sm text-muted-foreground">Loyers encaissés</p><p className="mt-1 text-2xl font-semibold text-success">{formatUSD(received)}</p><p className="text-sm text-muted-foreground">{formatFC(received * rate)}</p></div></div><div className="flex items-start gap-3"><span className="stat-icon bg-destructive/10 text-destructive"><ArrowUpRight /></span><div><p className="text-sm text-muted-foreground">Dépenses de la maison</p><p className="mt-1 text-2xl font-semibold">{formatUSD(spent)}</p><p className="text-sm text-muted-foreground">{formatFC(spent * rate)}</p></div></div></div>
     </section>
