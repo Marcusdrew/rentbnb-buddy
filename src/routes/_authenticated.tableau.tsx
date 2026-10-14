@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { settingsQuery, tenantsQuery, expensesQuery, paymentsQuery, ensureSettings } from "@/lib/data";
 import { formatUSD, formatFC } from "@/lib/format";
-import { inMonth, expenseUsd, monthlyIncome, displayDate, dueDate, generalBalance, previousMonth } from "@/lib/monthly";
+import { inMonth, expenseUsd, monthlyIncome, displayDate, generalBalance, previousMonth } from "@/lib/monthly";
 import { useMonth } from "@/components/month-picker";
 import { BudgetRing } from "@/components/budget-ring";
 import { Card, CardContent } from "@/components/ui/card";
