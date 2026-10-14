@@ -1,0 +1,2 @@
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.tenants.expected_usd IS 'DEPRECATED for status: rents are recorded as received payments directly';
