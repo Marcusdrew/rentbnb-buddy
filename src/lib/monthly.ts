@@ -30,3 +30,21 @@ export function rentStatus(expected: number, covered: number, month: string, due
   if (today > dueDate(month, dueDay)) return "En retard";
   return covered > 0 ? "Partiel" : "En attente";
 }
+
+/** Solde général cumulé : tout l'argent reçu moins toutes les dépenses jusqu'à la fin du mois donné (inclus). */
+export function generalBalance(
+  payments: { received_date: string; amount_usd: number }[],
+  expenses: { expense_date: string; amount_usd: number; amount_fc: number }[],
+  rate: number,
+  upToMonth: string,
+) {
+  const inc = payments.filter(p => p.received_date.slice(0, 7) <= upToMonth).reduce((s, p) => s + Number(p.amount_usd), 0);
+  const out = expenses.filter(e => e.expense_date.slice(0, 7) <= upToMonth).reduce((s, e) => s + expenseUsd(e, rate), 0);
+  return inc - out;
+}
+/** Mois précédent au format AAAA-MM. */
+export function previousMonth(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y!, m! - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
