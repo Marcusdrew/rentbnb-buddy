@@ -48,7 +48,7 @@ export const tenantsQuery = queryOptions({
   queryFn: async (): Promise<Tenant[]> => {
     const { data, error } = await supabase
       .from("tenants")
-      .select("*")
+      .select("*").eq("archived", false)
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data ?? []) as Tenant[];
