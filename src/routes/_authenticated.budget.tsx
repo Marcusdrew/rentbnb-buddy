@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { settingsQuery, paymentsQuery, expensesQuery, type Expense } from "@/lib/data";
 import { SEED_EXPENSES, CATEGORIES } from "@/lib/seed";
 import { formatUSD, formatFC, fcToUsd } from "@/lib/format";
-import { localDate, inMonth, expenseUsd, monthlyIncome, displayDate } from "@/lib/monthly";
+import { localDate, inMonth, expenseUsd, monthlyIncome, displayDate, generalBalance } from "@/lib/monthly";
 import { useMonth } from "@/components/month-picker";
 import { BudgetRing } from "@/components/budget-ring";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,6 +84,7 @@ function BudgetPage() {
   const total = expenses.reduce((s, e) => s + costUsd(e), 0);
   const paidTotal = expenses.filter((e) => e.paid).reduce((s, e) => s + costUsd(e), 0);
   const balance = income - total;
+  const general = generalBalance(payments, allExpenses, rate, month);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Expense[]>();
@@ -185,7 +186,7 @@ function BudgetPage() {
       <section className="flex flex-col items-center gap-6 border-y border-border py-6 sm:flex-row sm:justify-between">
         <BudgetRing income={income} expenses={total} />
         <div className="grid w-full flex-1 grid-cols-2 gap-4 sm:gap-6">
-          {[{ label: "Revenus reçus", value: income }, { label: "Total des dépenses", value: total }, { label: "Déjà payé", value: paidTotal }, { label: "Solde du mois", value: balance }].map(v => <div key={v.label} className="min-w-0"><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 truncate text-xl font-semibold sm:text-2xl ${v.value < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(v.value)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{formatFC(v.value * rate)}</p></div>)}
+          {[{ label: "Revenus reçus", value: income }, { label: "Total des dépenses", value: total }, { label: "Déjà payé", value: paidTotal }, { label: "Solde du mois", value: balance }, { label: "Solde général", value: general }].map(v => <div key={v.label} className="min-w-0"><p className="text-xs text-muted-foreground">{v.label}</p><p className={`mt-1 truncate text-xl font-semibold sm:text-2xl ${v.value < 0 ? "text-destructive" : "text-primary"}`}>{formatUSD(v.value)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{formatFC(v.value * rate)}</p></div>)}
         </div>
       </section>
 
