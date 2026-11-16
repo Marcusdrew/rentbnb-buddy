@@ -3,7 +3,7 @@ import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Download } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/carnet-client";
 import { useAuth } from "@/hooks/use-auth";
 import { settingsQuery, paymentsQuery, expensesQuery, type Expense } from "@/lib/data";
 import { SEED_EXPENSES, CATEGORIES } from "@/lib/seed";

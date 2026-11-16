@@ -7,7 +7,7 @@ import {
 import { useEffect } from "react";
 import { BookOpenText, LayoutDashboard, Users, Wallet, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/carnet-client";
 import logo from "@/assets/mon-carnet-logo.png";
 import { MonthProvider, MonthPicker } from "@/components/month-picker";
 import { Button } from "@/components/ui/button";
