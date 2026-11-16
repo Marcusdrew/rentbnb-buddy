@@ -12,3 +12,4 @@
 - Keep the selected calendar month in the authenticated layout context so every carnet view uses the same period.
 - Use dated rental_payments as the source of received income, not the deprecated tenants.received_usd total, to preserve monthly history.
 - Keep monthly filtering, conversion and due-date calculations in the shared monthly module so summaries and ledgers agree.
+- Use the shared public backend configuration and carnet client for external account access, including MCP issuer and requests; leave generated Cloud bindings untouched so app traffic cannot mix accounts across backends.
